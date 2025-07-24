@@ -1,55 +1,73 @@
 package main
 
-import "fmt"
+import (
+	"encoding/json"
+	"fmt"
+
+	"github.com/clary-work01/crypto_exchange/orderbook"
+	"github.com/labstack/echo/v4"
+)
 
 func main() {
-	// 創建 BTC/USDT 訂單簿
-	ob := NewOrderBook("BTCUSDT")
+	e := echo.New()
+	ex := NewExchange()
 
-	// 創建一些測試訂單
-	buyOrder1 := &Order{
-		ID:       "buy1",
-		Side:     Bid,
-		Type:     Limit,
-		Price:    50000,
-		Quantity: 1.0,
-	}
+	e.POST("/order", ex.handlePlaceOrder)
 
-	// sellOrder1 := &Order{
-	// 	ID:       "sell1",
-	// 	Side:     Ask,
-	// 	Type:     Limit,
-	// 	Price:    50100,
-	// 	Quantity: 0.5,
-	// }
-
-	// 下單
-	fmt.Println("=== 下限價買單 ===")
-	trades1 := ob.PlaceOrder(buyOrder1)
-	fmt.Printf("成交記錄數量: %d\n", len(trades1))
-	for _, trade := range trades1 {
-		fmt.Printf("成交: 價格=%f, 數量=%f\n", trade.Price, trade.Quantity)
-	}
-
-	// fmt.Println("\n=== 下限價賣單 ===")
-	// trades2 := ob.PlaceOrder(sellOrder1)
-	// fmt.Printf("成交記錄數量: %d\n", len(trades2))
-	// for _, trade := range trades2 {
-	// 	fmt.Printf("成交: 價格=%f, 數量=%f\n", trade.Price, trade.Quantity)
-	// }
-
-	// 下市價單
-	// marketBuy := &Order{
-	// 	ID:       "market1",
-	// 	Side:     Bid,
-	// 	Type:     Market,
-	// 	Quantity: 0.8,
-	// }
-	// fmt.Println("\n=== 下市價買單 ===")
-	// trades4 := ob.PlaceOrder(marketBuy)
-	// fmt.Printf("成交記錄數量: %d\n", len(trades4))
-	// for _, trade := range trades4 {
-	// 	fmt.Printf("成交: 價格=%f, 數量=%f\n", trade.Price, trade.Quantity)
-	// }
+	e.Start(":3000")
 
 }
+
+type Exchange struct {
+	OrderBooks map[orderbook.Symbol]*orderbook.OrderBook
+}
+
+func NewExchange() *Exchange {
+	orderbooks := make(map[orderbook.Symbol]*orderbook.OrderBook)
+	orderbooks[orderbook.ETH] = orderbook.NewOrderBook(orderbook.ETH)
+
+	return &Exchange{
+		OrderBooks: orderbooks,
+	}
+}
+
+type PlaceOrderRequest struct {
+	Symbol   orderbook.Symbol
+	Type     orderbook.OrderType
+	Side     orderbook.OrderSide
+	Price    float64
+	Quantity float64
+}
+
+func (ex *Exchange) handlePlaceOrder(ctx echo.Context) error {
+	var req PlaceOrderRequest
+
+	if err := json.NewDecoder(ctx.Request().Body).Decode(&req); err != nil {
+		return err
+	}
+
+	fmt.Println(req.Symbol)
+	buyOrder1 := &orderbook.Order{
+		ID:       "buy1",
+		Symbol:   req.Symbol,
+		Side:     req.Side,
+		Type:     req.Type,
+		Price:    req.Price,
+		Quantity: req.Quantity,
+	}
+
+	symbol := req.Symbol
+	ob := ex.OrderBooks[symbol]
+	trade := ob.PlaceOrder(buyOrder1)
+	fmt.Println(trade)
+	return ctx.JSON(200, "order placed")
+}
+
+// func (ex *Exchange) handleGetOrderBook(ctx echo.Context) error {
+// 	symbol := ctx.Param("symbol")
+// 	ob, ok := ex.OrderBooks[orderbook.Symbol(symbol)]
+
+// 	if !ok {
+// 		return ctx.JSON(http.StatusBadRequest, map[string]string{"msg": "symbol not found"})
+// 	}
+// }
